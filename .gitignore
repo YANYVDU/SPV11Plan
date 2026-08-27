@@ -1,0 +1,6 @@
+# Python 缓存
+__pycache__/
+*.pyc
+
+# Claude Code 本地配置（可能含环境变量/密钥）
+.claude/
