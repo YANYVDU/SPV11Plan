@@ -68,6 +68,44 @@ DEFAULT_CS_INCLINATION = {
 }
 
 # =====================================================================
+# 中文城邦名 -> MinorCiv Type 映射（Civ5DebugDatabase 无本地化表，手工维护）
+# =====================================================================
+CN_NAME_TO_TYPE = {
+    "波哥大": "MINOR_CIV_BOGOTA", "布拉迪斯拉发": "MINOR_CIV_BRATISLAVA",
+    "布鲁塞尔": "MINOR_CIV_BRUSSELS", "布加勒斯特": "MINOR_CIV_BUCHAREST",
+    "布宜诺斯艾利斯": "MINOR_CIV_BUENOS_AIRES", "佛罗伦萨": "MINOR_CIV_FLORENCE",
+    "喀布尔": "MINOR_CIV_KABUL", "基辅": "MINOR_CIV_KIEV",
+    "吉隆坡": "MINOR_CIV_KUALA_LUMPUR", "克孜勒": "MINOR_CIV_KYZYL",
+    "米兰": "MINOR_CIV_MILAN", "摩纳哥": "MINOR_CIV_MONACO",
+    "布拉格": "MINOR_CIV_PRAGUE", "埃里温": "MINOR_CIV_YEREVAN",
+    "比布鲁斯": "MINOR_CIV_BYBLOS", "开普敦": "MINOR_CIV_CAPE_TOWN",
+    "马尼拉": "MINOR_CIV_MANILA", "摩加迪沙": "MINOR_CIV_MOGADISHU",
+    "蒙巴萨": "MINOR_CIV_MOMBASA", "霍尔木兹": "MINOR_CIV_ORMUS",
+    "巴拿马": "MINOR_CIV_PANAMA_CITY", "魁北克": "MINOR_CIV_QUEBEC_CITY",
+    "拉古萨": "MINOR_CIV_RAGUSA", "里加": "MINOR_CIV_RIGA",
+    "悉尼": "MINOR_CIV_SYDNEY", "乌尔": "MINOR_CIV_UR",
+    "温哥华": "MINOR_CIV_VANCOUVER", "惠灵顿": "MINOR_CIV_WELLINGTON",
+    "塔那那利佛": "MINOR_CIV_ANTANANARIVO", "安特卫普": "MINOR_CIV_ANTWERP",
+    "卡霍基亚": "MINOR_CIV_CAHOKIA", "科伦坡": "MINOR_CIV_COLOMBO",
+    "迪拜": "MINOR_CIV_DUBAI", "热那亚": "MINOR_CIV_GENOA",
+    "马六甲": "MINOR_CIV_MALACCA", "墨尔本": "MINOR_CIV_MELBOURNE",
+    "撒马尔罕": "MINOR_CIV_SAMARKAND", "新加坡": "MINOR_CIV_SINGAPORE",
+    "推罗": "MINOR_CIV_TYRE", "维尔纽斯": "MINOR_CIV_VILNIUS",
+    "桑给巴尔": "MINOR_CIV_ZANZIBAR", "苏黎世": "MINOR_CIV_ZURICH",
+    "日内瓦": "MINOR_CIV_GENEVA", "伊费": "MINOR_CIV_IFE",
+    "耶路撒冷": "MINOR_CIV_JERUSALEM", "加德满都": "MINOR_CIV_KATHMANDU",
+    "拉本塔": "MINOR_CIV_LA_VENTA", "甘托克": "MINOR_CIV_GANGTOK",
+    "梵蒂冈": "MINOR_CIV_VATICAN_CITY", "维滕贝格": "MINOR_CIV_WITTENBERG",
+    "阿拉木图": "MINOR_CIV_ALMATY", "贝尔格莱德": "MINOR_CIV_BELGRADE",
+    "布达佩斯": "MINOR_CIV_BUDAPEST", "河内": "MINOR_CIV_HANOI",
+    "姆班扎刚果": "MINOR_CIV_MBANZA_KONGO", "西顿": "MINOR_CIV_SIDON",
+    "索非亚": "MINOR_CIV_SOFIA", "瓦莱塔": "MINOR_CIV_VALLETTA",
+}
+
+# 用户CSV四路线列名 -> 工具内 Grand Strategy key
+GS_CN_KEY = {"征服胜利": "CONQUEST", "文化胜利": "CULTURE", "科技胜利": "SCIENCE", "外交胜利": "DIPLO"}
+
+# =====================================================================
 # C++ 里没有进 Defines 表、硬编码在 CvDiplomacyAI.cpp 的权重（antonjs: todo constant/XML）
 # =====================================================================
 HARDCODED = {
@@ -177,6 +215,26 @@ def load_inclination_csv(csv_path):
     return inc
 
 
+def load_contest_csv(csv_path):
+    """读取城邦UA四路线争夺偏置CSV（GBK编码，Excel 保存）。
+    格式: 城邦名,UA描述,征服胜利,文化胜利,科技胜利,外交胜利,总分数
+    返回 {Type: {CONQUEST/CULTURE/SCIENCE/DIPLO: int}}。
+    """
+    bias = {}
+    with open(csv_path, "r", encoding="gbk", newline="") as f:
+        for row in csv.DictReader(f):
+            cn = (row.get("城邦名") or "").strip()
+            if not cn:
+                continue
+            typ = CN_NAME_TO_TYPE.get(cn, cn)
+            vec = {}
+            for col, gs in GS_CN_KEY.items():
+                v = (row.get(col) or "0").strip()
+                vec[gs] = int(v) if v.lstrip("-").isdigit() else 0
+            bias[typ] = vec
+    return bias
+
+
 # =====================================================================
 # 倾向聚合与匹配
 # =====================================================================
@@ -216,7 +274,7 @@ class Scenario:
         self.match_scale = 20.0
 
 
-def compute_weights(leader, minor, cs_incl, defines, scenario):
+def compute_weights(leader, minor, cs_incl, defines, scenario, cs_contest_bias=None):
     """复刻 GetBestApproachTowardsMinorCiv 的可静态确定权重项。
     返回 (weights dict, 分解明细 dict)。
     """
@@ -302,13 +360,22 @@ def compute_weights(leader, minor, cs_incl, defines, scenario):
         add("极远", "CONQUEST", defines.get("MINOR_APPROACH_CONQUEST_PROXIMITY_DISTANT", -10))
         add("极远", "BULLY", HARDCODED["BULLY_PROXIMITY_DISTANT"])
 
-    # 8. CSUA 倾向匹配（核心新增）
-    leader_dim = aggregate_flavor(leader["flavors"])
-    match = inclination_match(cs_incl, leader_dim)
-    if match > 0:
-        bonus = match * scenario.match_scale
-        add("CSUA倾向匹配→FRIENDLY", "FRIENDLY", bonus)
-        add("CSUA倾向匹配→PROTECTIVE", "PROTECTIVE", bonus)
+    # 8. 城邦UA 争夺偏置（二选一）
+    if cs_contest_bias is not None:
+        # 用户CSV：按当前胜利路线查该城邦偏置 X，同时加到 FRIENDLY + PROTECTIVE
+        bias = cs_contest_bias.get(minor["type"], {}).get(scenario.grand_strategy, 0)
+        if bias:
+            add("路线偏置", "FRIENDLY", bias)
+            add("路线偏置", "PROTECTIVE", bias)
+        match = float(bias)
+    else:
+        # 原 CSUA 倾向匹配（城邦倾向 × 领袖 flavor 余弦相似度）
+        leader_dim = aggregate_flavor(leader["flavors"])
+        match = inclination_match(cs_incl, leader_dim)
+        if match > 0:
+            bonus = match * scenario.match_scale
+            add("CSUA倾向匹配→FRIENDLY", "FRIENDLY", bonus)
+            add("CSUA倾向匹配→PROTECTIVE", "PROTECTIVE", bonus)
 
     return w, detail, match
 
@@ -329,10 +396,10 @@ def contest_score(w):
 APPROACH_CN = {"IGNORE": "无视", "FRIENDLY": "友好", "PROTECTIVE": "保护", "CONQUEST": "征服", "BULLY": "勒索"}
 
 
-def print_terminal_table(leaders, minors, cs_incl, defines, scenario):
+def print_terminal_table(leaders, minors, cs_incl, defines, scenario, cs_contest_bias=None):
     """终端简表：城邦 × 领袖 争夺分数。"""
-    minor_list = [m for m in minors.values() if m["uatype"]]
-    # 只显示有 CSUA 的城邦 + 有文明映射的领袖
+    minor_list = list(minors.values())
+    # 只显示有文明映射的领袖
     leader_list = [l for l in leaders.values() if l["civ"]]
 
     header = f"{'城邦\\领袖':<14}" + "".join(f"{short(l['civ']):>10}" for l in leader_list)
@@ -343,21 +410,21 @@ def print_terminal_table(leaders, minors, cs_incl, defines, scenario):
     for m in minor_list:
         row = f"{short(m['type']):<14}"
         for l in leader_list:
-            w, _, _ = compute_weights(l, m, cs_incl.get(m["type"], {}), defines, scenario)
+            w, _, _ = compute_weights(l, m, cs_incl.get(m["type"], {}), defines, scenario, cs_contest_bias)
             row += f"{contest_score(w):>10.1f}"
         print(row)
     print("(单元格 = 争夺分数 = FRIENDLY + PROTECTIVE 权重)")
 
 
-def print_summary(leaders, minors, cs_incl, defines, scenario, top_n=5):
+def print_summary(leaders, minors, cs_incl, defines, scenario, top_n=5, cs_contest_bias=None):
     """终端摘要：每个城邦争夺分数最高的 N 个领袖 + 最终态度。"""
-    minor_list = [m for m in minors.values() if m["uatype"]]
+    minor_list = list(minors.values())
     leader_list = [l for l in leaders.values() if l["civ"]]
     print(f"\n=== 各城邦争夺 Top{top_n} 领袖（场景: {scenario.grand_strategy}/{scenario.proximity}/{scenario.personality}）===")
     for m in minor_list:
         scored = []
         for l in leader_list:
-            w, _, match = compute_weights(l, m, cs_incl.get(m["type"], {}), defines, scenario)
+            w, _, match = compute_weights(l, m, cs_incl.get(m["type"], {}), defines, scenario, cs_contest_bias)
             scored.append((contest_score(w), short(l["civ"]), APPROACH_CN[final_approach(w)]))
         scored.sort(reverse=True)
         line = "  " + " | ".join(f"{name}:{score:.0f}({appr})" for score, name, appr in scored[:top_n])
@@ -372,9 +439,9 @@ def short(s):
     return s
 
 
-def generate_html(leaders, minors, cs_incl, defines, strategies, output_path):
+def generate_html(leaders, minors, cs_incl, defines, strategies, output_path, cs_contest_bias=None):
     """生成自包含 HTML 报告：城邦 × 领袖 争夺分数热力图矩阵。"""
-    minor_list = [m for m in minors.values() if m["uatype"]]
+    minor_list = list(minors.values())
     leader_list = [l for l in leaders.values() if l["civ"]]
     leader_list.sort(key=lambda l: l["civ"])
 
@@ -385,7 +452,7 @@ def generate_html(leaders, minors, cs_incl, defines, strategies, output_path):
         matrix = []
         for m in minor_list:
             for l in leader_list:
-                w, detail, match = compute_weights(l, m, cs_incl.get(m["type"], {}), defines, scenario)
+                w, detail, match = compute_weights(l, m, cs_incl.get(m["type"], {}), defines, scenario, cs_contest_bias)
                 matrix.append({
                     "minor": m["type"], "leader": l["type"],
                     "score": round(contest_score(w), 1),
@@ -493,7 +560,7 @@ function showDetail(minor, leader) {
   const mn = PAYLOAD.minors.find(m => m.type === minor).short;
   const ln = PAYLOAD.leaders.find(l => l.type === leader).short;
   let html = `<h3>${mn} × ${ln}（路线 ${gs}）</h3>`;
-  html += `<div>争夺分数 = <b>${c.score.toFixed(1)}</b>　倾向匹配分 = ${c.match.toFixed(1)}　最终态度 = <b>${APPROACH_LABEL[c.approach]}</b></div>`;
+  html += `<div>争夺分数 = <b>${c.score.toFixed(1)}</b>　路线偏置分 = ${c.match.toFixed(1)}　最终态度 = <b>${APPROACH_LABEL[c.approach]}</b></div>`;
   html += '<table><tr><th>approach</th><th>IGNORE</th><th>FRIENDLY</th><th>PROTECTIVE</th><th>CONQUEST</th><th>BULLY</th></tr>';
   html += '<tr><td>权重</td>';
   ['IGNORE','FRIENDLY','PROTECTIVE','CONQUEST','BULLY'].forEach(a => {
@@ -523,6 +590,8 @@ def main():
     parser = argparse.ArgumentParser(description="城邦争夺分数计算器")
     parser.add_argument("--db", default=default_db, help="Civ5 数据库路径（默认 Civ5DebugDatabase.db）")
     parser.add_argument("--csv", default=None, help="城邦争夺倾向 CSV（可选，覆盖内置默认）")
+    parser.add_argument("--contest-csv", default=None,
+                        help="城邦UA四路线争夺偏置 CSV（可选，GBK编码，列: 城邦名,UA描述,征服胜利,文化胜利,科技胜利,外交胜利,总分数）")
     parser.add_argument("--strategy", default="DIPLO",
                         help="胜利路线: DIPLO|CULTURE|CONQUEST|SCIENCE|ALL")
     parser.add_argument("--out", default="cs_contest_report.html", help="HTML 报告输出路径")
@@ -546,8 +615,22 @@ def main():
     else:
         print("使用内置城邦倾向默认值（可用 --csv 覆盖）")
 
-    # 只保留有 CSUA 的城邦（SP V11 的 9 个）
-    csua_minors = {k: v for k, v in minors.items() if v["uatype"]}
+    # 城邦UA 四路线争夺偏置（用户 CSV 模式）
+    cs_contest_bias = None
+    if args.contest_csv:
+        cs_contest_bias = load_contest_csv(args.contest_csv)
+        print(f"已从 CSV 加载四路线争夺偏置: {args.contest_csv}（{len(cs_contest_bias)} 个城邦）")
+
+        # 合成数据库缺失的城邦（迪拜/甘托克 SP 设计替换了香港/拉萨，数据库中无对应行）
+        for typ in cs_contest_bias:
+            if typ not in minors:
+                minors[typ] = {"type": typ, "trait": "", "uatype": "CSUA", "flavors": {}}
+
+    # 城邦集合：CSV 模式取 CSV 里的城邦，否则取有 CSUA 的城邦
+    if cs_contest_bias is not None:
+        csua_minors = {k: v for k, v in minors.items() if k in cs_contest_bias}
+    else:
+        csua_minors = {k: v for k, v in minors.items() if v["uatype"]}
     print(f"城邦(CSUA)数: {len(csua_minors)}，领袖数: {sum(1 for l in leaders.values() if l['civ'])}")
 
     strategies = ["DIPLO", "CULTURE", "CONQUEST", "SCIENCE"] if args.strategy == "ALL" else [args.strategy]
@@ -555,12 +638,12 @@ def main():
     # 终端输出（默认 DIPLO 场景）
     scenario = Scenario(grand_strategy=strategies[0])
     if args.full:
-        print_terminal_table(leaders, csua_minors, cs_incl, defines, scenario)
+        print_terminal_table(leaders, csua_minors, cs_incl, defines, scenario, cs_contest_bias)
     else:
-        print_summary(leaders, csua_minors, cs_incl, defines, scenario, args.top)
+        print_summary(leaders, csua_minors, cs_incl, defines, scenario, args.top, cs_contest_bias)
 
     # HTML 报告
-    out = generate_html(leaders, csua_minors, cs_incl, defines, strategies, args.out)
+    out = generate_html(leaders, csua_minors, cs_incl, defines, strategies, args.out, cs_contest_bias)
     print(f"\nHTML 报告已生成: {os.path.abspath(out)}")
 
 

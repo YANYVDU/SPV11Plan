@@ -10,16 +10,10 @@
 			"path": "../Civ5-MPDLL-API-INSTRUCTION"
 		},
 		{
-			"path": "../Super-Power-Remaking-of-World-Order"
+			"path": "../V11/Super-Power-Remaking-of-World-Order"
 		},
 		{
-			"path": "../world-power"
-		},
-		{
-			"path": "C:/Users/pc/Documents/My Games/Sid Meier's Civilization 5/MODS/AI科研报告"
-		},
-		{
-			"path": "../../../../Program Files (x86)/Steam/steamapps/common/Sid Meier's Civilization V/Assets"
+			"path": "../Community-Patch-DLL"
 		}
 	],
 	"settings": {}
