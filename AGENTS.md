@@ -43,15 +43,24 @@ D:\Git\CIV5\build-mpdll.cmd
 
 该脚本做三件事：删 `BuildTemp\VS2022_CvGameCore_Expansion2ReleaseWin32`（**必须先删，否则 PCH 陈旧会报大量"成员不存在"假错误**）→ 跑 MSBuild Release|Win32 → post-build 自动拷到 `(1) CIV5MPDLL\DLL`。
 
-**工具链约束（2026-10-17 实测，别随意改）**
+**工具链约束（2026-10-17 用 PDB / tlog 实证，别随意改）**
 
-- 工程是 **VS2022 v143（MSVC 14.43.34808）+ VS2008 的 STL 头 + v90 C++ 运行库** 的混合体：
-  - `CIV5MPDLL\MPDLLCompile.props` 把 `IncludePath`/`LibraryPath` 写死指向
-    `C:\Program Files (x86)\Microsoft Visual Studio 9.0\VC\...` 与 `C:\Program Files\Microsoft SDKs\Windows\v6.0A\...`
-  - **这两个目录不能删**，删了立刻编不过
-- 产物必须导入 **`MSVCP90.dll` / `MSVCR90.dll`**。用 `dumpbin /imports` 核对；若变成 `MSVCP140`，说明 STL ABI 换了——游戏主程序是 VS2008 编的，`CvDllInterfaces.h` 里 `ICvGameSetup1` 的 `setVersionString(const std::string&)`/`versionString()`/`setVictories(const std::vector<bool>&)` 会跨 exe↔DLL 传 `std::string`，ABI 一变联机建局会崩。
-- 导出表只应有 `DllGetGameContext`。
-- 额外开关在 `D:\mig\extra.props`（命令行 `ForceImportAfterCppTargets` 传入，**不改仓库文件**）：`VCToolsVersion=14.43.34808`、`/Zc:threadSafeInit-`、`/Zc:sizedDealloc-`、显式链 VS2008 的 `msvcprt.lib`、`/FORCE:MULTIPLE`。
+- 真正的编译器是 **VS2013 的 cl 18.00**，不是 VS2022 的 14.43：MSBuild 用的是 VS2022 的工程骨架，
+  但 `CIV5MPDLL\MPDLLCompile.props` 里的 `ExecutablePath` 把 `cl.exe` 指到了
+  `C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin`。
+  cl 18.00 编 VS2008 头文件不报 `C7576`，生成的 EH / sized 辅助符号也正好是 v90 CRT 里有的那套。
+- 三个目录**都不能删**，缺一个就编不过：
+  1. `C:\Program Files (x86)\Microsoft Visual Studio 9.0\VC`（VS2008 头/库）
+  2. `C:\Program Files\Microsoft SDKs\Windows\v6.0A`（Windows SDK 6.0A）
+  3. `C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC`（VS2013 cl 18.00）
+- 产物必须只导入 **`MSVCP90.dll` / `MSVCR90.dll`**。用 `dumpbin /imports` 核对；出现
+  `VCRUNTIME140` / `api-ms-win-crt-*` 说明混进了现代 CRT（会把 `new`/`delete` 拆到两个堆上导致崩溃）。
+  也不能变成 `MSVCP140`——游戏主程序是 VS2008 编的，`CvDllInterfaces.h` 里 `ICvGameSetup1` 的
+  `setVersionString(const std::string&)` / `versionString()` / `setVictories(const std::vector<bool>&)`
+  会跨 exe↔DLL 传 `std::string`，ABI 一变联机建局会崩。
+- 导出表只有 `DllGetGameContext`（另有 VS 工具链自带的一个 STL 附带导出，属正常）。
+- **不要**再引入 `extra.props`、`CL` 环境变量、`wchar.h` 补丁或 `/FORCE:MULTIPLE`——
+  那些是在"缺 VS2013"时绕过 `C7576` 用的补丁，副作用是跨堆释放。
 
 ### 打包成 MOD
 
