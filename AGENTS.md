@@ -79,7 +79,7 @@ D:\Git\CIV5\dyy\civ5-mod-builder.exe --from "<工程.civ5proj>" --to "<MODS目�
 
 - **CIV5MPDLL 仓库里所有代码注释一律英文，禁止中文**：源文件是无 BOM 的 UTF-8，VC9 工具链按 GBK 解析，中文注释会引发 C4716/C4700 之类误报。
 - 新增序列化成员（`CvPlayer`/`CvCity`/`CvUnit` 的新字段）必须做版本门控，用 `CustomMods.h` 里 `MOD_SERIALIZE` 系列宏包 Read/Write，保旧档兼容；没有现成脚本时先问用户是否补。
-- 当前 DLL 版本号 **164**（`CvGameCoreDLL_Expansion2/CustomMods.h`），与工作区不一致时主动问是否同步。
+- 当前 DLL 版本号 **167**（`CvGameCoreDLL_Expansion2/CustomMods.h`），与工作区不一致时主动问是否同步。
 - 新增数据库表要在 API 说明库对应分类 `.sql` 里补带中文注释的建表文档：政策→`policy.sql`、特性→`trait.sql`、信条→`belief.sql`、建筑→`building.sql`、单位→`unit.sql`、晋升→`promotion.sql`、游戏速度→`gamespeed.sql`。
 
 ## 数据核对：优先查数据库，不要 grep 源文件
