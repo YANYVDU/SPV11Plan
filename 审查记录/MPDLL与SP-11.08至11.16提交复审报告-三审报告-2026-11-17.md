@@ -47,7 +47,7 @@
 | 16 | `5b6f561` Cleanup: swap the two aid-point entry comments back into place | — | 拆提交时工具把两条注释互换，改回 |
 
 副作用（有意为之，需知悉）：
-- 删除 5 个 `SP_AID_POINT_COST_*` 选项后，SP 的 `DLL_Options.xml` 里对它们的 `<Update>` 已一并删除，`CSUA.sql` 的 `CostOption` 列已置 `NULL`；价格仍与改动前完全一致（20/50/10/20/50）。
+- 删除 5 个 `SP_AID_POINT_COST_*` 选项后，SP 的 `DLL_Options.xml` 里对它们的 `<Update>` 已一并删除；`AidPointActions.CostOption` 这一列随后整体删除（`69237fa` / `0c53a4d` / `74b7273`），不再有恒为 `NULL` 的列；价格仍与改动前完全一致（20/50/10/20/50）。
 - `CvCityStateUAClasses.cpp` 的建筑类大科点只在开关开启时按 active 计数，关闭时回到原版口径。
 
 ---
